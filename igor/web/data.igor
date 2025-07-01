@@ -1,0 +1,92 @@
+[* json.enabled string.enabled]
+[ts file="data-protocol.data.ts"]
+module DataProtocol
+{
+    [* binary.enabled]
+    enum LogLevel
+    {
+        trace;
+        debug;
+        info;
+        notice;
+        warning;
+        error;
+        fatal;
+    }
+
+    // Timeline time units
+    enum BinUnit 
+    {
+        msec;
+        sec;
+        min;
+        hour;
+        day;
+    }
+
+    // Ordering
+    enum OrderDirection {
+        asc;
+        desc;
+    }
+
+    // Generic collections
+    record Collection<T>
+    {
+        list<T> items;
+    }
+
+    record CollectionSlice<T>
+    {
+        int total;
+        list<T> items;
+    }
+
+    // Generic result and response
+    interface IResult
+    {
+        bool result;
+    }
+
+    record GenericResponse: IResult
+    {
+    }
+
+    [deno http.status=400]
+    exception BadRequestError<T>
+    {
+        T reason;
+    }
+
+    [deno http.status=401]
+    exception UnauthorizedError
+    {
+    }
+
+    [deno http.status=403]
+    exception ForbiddenError
+    {
+    }
+
+    [deno http.status=403]
+    exception ForbiddenErrorEx<T>
+    {
+        T reason;
+    }
+
+    [deno http.status=404]
+    exception NotFoundError
+    {
+    }
+
+    [deno http.status=500]
+    exception InternalServerError
+    {
+        string message;
+    }
+
+    [deno http.status=501]
+    exception NotImplementedError {
+        string message = "Not yet implemented";
+    }
+}

@@ -1,0 +1,274 @@
+using DataProtocol;
+using CommonProtocol;
+
+[* json.enabled string.enabled]
+[ts file="web.data.ts"]
+[deno http.server]
+module WebProtocol
+{
+    enum Role
+    {
+        chronos_guest;
+        chronos_web;
+        chronos_external;
+        chronos_zeus;
+    }
+    variant Claims
+    {
+        tag Role role;
+    }
+    record Claims.ClaimsGuest[chronos_guest]
+    {
+    }
+    record Claims.ClaimsWeb[chronos_web]
+    {
+        string username;
+    }
+    record Claims.ClaimsExternal[chronos_external]
+    {
+        string key;
+    }
+    record Claims.ClaimsZeus[chronos_zeus]
+    {
+        string key;
+    }
+
+    // Auth data
+    record LoginRequest
+    {
+        string username;
+        string password;
+    }
+
+    enum LoginError
+    {
+        failure;
+        already_logged_in;
+        account_not_exists;
+        account_is_blocked;
+        account_is_deleted;
+        invalid_password;
+    }
+
+    enum LogoutError
+    {
+        failure;
+        not_logged_in;
+    }
+
+    enum AccessError
+    {
+        not_logged_in;
+    }
+
+    record Account
+    {
+        Id id;
+        int rev;
+        string username;
+        ?string name;
+        ?string email;
+        ?string phone;
+        bool is_blocked;
+        bool is_deleted;
+        DateTime created_at;
+        DateTime updated_at;
+    }
+
+    // API data
+    record Component
+    {
+        string name;
+        list<string> versions;
+        list<string> branches;
+    }
+
+    record Application
+    {
+        string name;
+        list<Component> components;
+    }
+
+    record LogEntry
+    {
+        Id id;
+        string app;
+        string component;
+        string branch;
+        string version;
+        LogLevel level;
+        DateTime timestamp;
+        json data;
+        string message;
+        int msg_count;
+        int seq_id;
+    }
+
+    record TimelineEntry
+    {
+        DateTime time_bin;
+        int num_trace;
+        int num_debug;
+        int num_info;
+        int num_notice;
+        int num_warning;
+        int num_error;
+        int num_fatal;
+    }
+
+    record ErrorEntry
+    {
+        int count;
+        string message;
+    }
+
+    record CrashReport
+    {
+        Id id;
+        string app;
+        string component;
+        string branch;
+        string version;
+        string game_engine;
+        string username;
+        string filename;
+        string reason;
+        ?string user_comment;
+        json data;
+        DateTime created_at;
+    }
+
+    enum LogEntryOrderBy
+    {
+        id;
+        timestamp;
+    }
+
+    enum CrashReportOrderBy
+    {
+        id;
+        created_at;
+    }
+
+    [erlang http.server http.cowboy_req]
+    [ts http.client file="auth.service.ts" http.base_url="/api"]
+    webservice ChronosAuthService
+    {
+        # Login
+        [erlang http.handler="rest/generated/web_rest_auth_login" http.callback="web_rest_callback_auth"]
+        Login => POST /auth/login LoginRequest ->
+//            200: ~set-cookie: {
+//                [deno http.cookie_options="{ maxAge: 100000000, secure: ctx.request.secure, httpOnly: true, sameSite: \"strict\" }"]
+//                ?string access_token
+//            } Account,
+            200: Account,
+            403: ForbiddenErrorEx<LoginError>,
+            500: InternalServerError;
+
+        # Logout
+        [erlang http.handler="rest/generated/web_rest_auth_logout" http.callback="web_rest_callback_auth"]
+        Logout => PUT /auth/logout ->
+//            200: ~set-cookie: {
+//                [deno http.cookie_options="{ maxAge: -1, secure: ctx.request.secure, httpOnly: true, sameSite: \"strict\" }"]
+//                string access_token
+//            } GenericResponse,
+            200: GenericResponse,
+            403: ForbiddenErrorEx<LogoutError>,
+            500: InternalServerError;
+
+        # Get current user profile
+        [erlang http.handler="rest/generated/web_rest_auth_profile" http.callback="web_rest_callback_auth"]
+        GetMyProfile => GET /auth/profile ->
+            200: Account,
+            403: ForbiddenErrorEx<AccessError>,
+            500: InternalServerError;
+    }
+
+    [erlang http.server]
+    [ts http.client file="api.service.ts" http.base_url="/api"]
+    webservice ChronosApiService
+    {
+        [erlang http.handler="rest/generated/web_rest_apps" http.callback="web_rest_callback_apps"]
+        GetApplications => GET /apps -> {list<Application> response};
+
+        [erlang http.handler="rest/generated/web_rest_logs" http.callback="web_rest_callback_logs"]
+        GetLogs => GET /{string app}/{string component}/{string branch}/logs
+            ?version={?list<string> versions}
+            &date_from={?DateTime date_from}
+            &date_to={?DateTime date_to}
+            &log_level={?list<LogLevel> levels}
+            &search={?string search}
+            &order_by={?LogEntryOrderBy order_by}
+            &order_dir={?OrderDirection order_dir}
+            &offset={?int offset}
+            &limit={?int limit}
+            &metadata={?dict<string, string> metadata as json}
+            -> {list<LogEntry> response};
+
+        [erlang http.handler="rest/generated/web_rest_logs_versions" http.callback="web_rest_callback_logs"]
+        GetLogVersions => GET /{string app}/{string component}/{string branch}/logs/versions
+            -> {list<string> response};
+
+        [erlang http.handler="rest/generated/web_rest_logs_metadata" http.callback="web_rest_callback_logs"]
+        GetLogMetadataKeys => GET /{string app}/{string component}/{string branch}/logs/metadata
+            ?version={?list<string> versions}
+            -> {list<string> response};
+
+        [erlang http.handler="rest/generated/web_rest_logs_timeline" http.callback="web_rest_callback_logs"]
+        GetTimeline => GET /{string app}/{string component}/{string branch}/logs/timeline
+            ?version={?list<string> versions}
+            &date_from={DateTime date_from}
+            &date_to={DateTime date_to}
+            &bin_unit={BinUnit bin_unit}
+            &bin_duration={uint bin_duration}
+            &log_level={?list<LogLevel> levels}
+            &search={?string search}
+            &metadata={?dict<string, string> metadata as json}
+            -> {list<TimelineEntry> response};
+
+        [erlang http.handler="rest/generated/web_rest_errors" http.callback="web_rest_callback_errors"]
+        GetErrors => GET /{string app}/{string component}/{string branch}/errors
+            ?version={?list<string> versions}
+            &date_from={?DateTime date_from}
+            &date_to={?DateTime date_to}
+            &search={?string search}
+            &offset={?int offset}
+            &limit={?int limit}
+            -> {list<ErrorEntry> response};
+
+        [erlang http.handler="rest/generated/web_rest_crash_reports" http.callback="web_rest_callback_crash_reports"]
+        GetCrashReports => GET /{string app}/{string component}/{string branch}/crash-reports
+            ?version={?list<string> versions}
+            &date_from={?DateTime date_from}
+            &date_to={?DateTime date_to}
+            &search={?string search}
+            &game_engine={?string game_engine}
+            &username={?string username}
+            &reason={?string reason}
+            &order_by={?CrashReportOrderBy order_by}
+            &order_dir={?OrderDirection order_dir}
+            &offset={?int offset}
+            &limit={?int limit}
+            -> {list<CrashReport> response};
+
+        [erlang http.handler="rest/generated/web_rest_crash_reports_versions" http.callback="web_rest_callback_crash_reports"]
+        GetCrashReportVersions => GET /{string app}/{string component}/{string branch}/crash-reports/versions
+            -> {list<string> response};
+
+        [erlang http.handler="rest/generated/web_rest_crash_reports_metadata" http.callback="web_rest_callback_crash_reports"]
+        GetCrashReportMetadataKeys => GET /{string app}/{string component}/{string branch}/crash-reports/metadata
+            ?version={?list<string> versions}
+            -> {list<string> response};
+
+        [erlang http.handler="rest/generated/web_rest_crash_reports_pdb" http.callback="web_rest_callback_crash_reports"]
+        GetCrashReportPdb => GET /{string app}/{string component}/{string branch}/crash-reports/pdb/{string version}
+            -> Collection<string>;
+    }
+
+    [deno trpc.mode="skip"]
+    webservice ChronosMetricsService
+    {
+        [deno http.if="ctx.state.meta.noLog = true"]
+        GetMetrics => GET /metrics -> json;
+    }
+}

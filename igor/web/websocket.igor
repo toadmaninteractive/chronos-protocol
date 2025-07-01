@@ -1,0 +1,28 @@
+using CommonProtocol;
+using DataProtocol;
+
+[* json.enabled]
+[deno http.server]
+module ProtocolChronos
+{
+    record LogEntry
+    {
+        LogLevel level;
+        DateTime timestamp;
+        json data;
+        string message;
+        int msg_count;
+        int seq_id;
+    }
+
+    exception InvalidData
+    {
+        string reason;
+    }
+
+    [erlang server dispatcher="web_ws"]
+    service ServiceChronos
+    {
+        c->s Log(string app, string component, string branch, string version, list<LogEntry> logs) returns (int loaded) throws InvalidData;
+    }
+}

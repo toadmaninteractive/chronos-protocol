@@ -1,0 +1,6 @@
+/generated
+/schema.json
+*.user
+generl/obj
+generl/bin
+.vs

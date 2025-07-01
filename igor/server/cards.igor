@@ -1,0 +1,123 @@
+[* json.enabled]
+[schema enabled]
+[ts file="card-protocol.ts"]
+[erlang catalogue.file="cards"]
+module CardProtocol
+{
+    [schema editor=key]
+    [erlang alias="catalogue:key"]
+    define Key atom;
+
+    interface IKeyName
+    {
+        string name;
+        string key;
+    }
+
+    enum CardCategory
+    {
+        config;
+        application;
+        component_template;
+        component;
+        pdb_source;
+    }
+
+    enum LogLevel
+    {
+        trace;
+        debug;
+        info;
+        notice;
+        warning;
+        error;
+        fatal;
+    }
+
+    enum SlackReceiverKind
+    {
+        channel;
+        person;
+    }
+
+    enum PdbSourceKind
+    {
+        helios_api;
+        nginx_dir_index;
+    }
+
+    record SlackReceiver
+    {
+        SlackReceiverKind kind;
+        string title;
+        ?string branch;
+        LogLevel min_log_level = error;
+        [schema min=0 max=86400]
+        int throttle_sec;
+    }
+
+    [schema root]
+    [erlang catalogue.enabled]
+    variant Card
+    {
+        tag CardCategory category;
+        [* json.key="_id"]
+        [schema ignore]
+        atom id;
+    }
+
+    [schema category="application"]
+    define ApplicationKey Key;
+
+    [schema category="component_template"]
+    define ComponentTemplateKey Key;
+
+    [schema category="component"]
+    define ComponentKey Key;
+
+    [schema category="pdb_source"]
+    define PdbSourceKey Key;
+
+    [erlang catalogue.enabled]
+    [erlang singleton.file="card_config" singleton.name="config"]
+    record Card.CardConfig[config]
+    {
+        list<ApplicationKey> applications;
+        int log_lifetime_days = 60;
+    }
+
+    [erlang catalogue.enabled]
+    record Card.CardApplication[application]: IKeyName
+    {
+        list<ComponentKey> components = [];
+        int log_lifetime_days = 60;
+        ?PdbSourceKey default_pdb_source;
+        ?dict<string, PdbSourceKey> pdb_sources;
+    }
+
+    [erlang catalogue.enabled]
+    record Card.CardComponentTemplate[component_template]
+    {
+        list<string> collapse_fields = [];
+        list<string> default_metadata_fields = [];
+    }
+
+    [erlang catalogue.enabled]
+    record Card.CardComponent[component]: IKeyName
+    {
+        ComponentTemplateKey template;
+        list<SlackReceiver> slack_receivers = [];
+    }
+
+    [erlang catalogue.enabled]
+    record Card.CardPdbSource[pdb_source]: IKeyName
+    {
+        PdbSourceKind source;
+
+        # Variables: {app}, {component}, {branch}, {version}
+        string url;
+
+        ?string auth_header;
+        ?string auth_header_value;
+    }
+}

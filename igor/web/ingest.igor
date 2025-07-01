@@ -1,0 +1,60 @@
+using DataProtocol;
+using CommonProtocol;
+
+[* json.enabled string.enabled]
+[deno http.server]
+module IngestionProtocol
+{
+    enum IngestionError
+    {
+        # Invalid application
+        invalid_app;
+
+        # Invalid component
+        invalid_component;
+
+        # Invalid branch
+        invalid_branch;
+
+        # Invalid version
+        invalid_version;
+
+        # No log entries supplied
+        no_logs_to_ingest;
+    }
+
+    record IngestedLogEntry
+    {
+        LogLevel level;
+        DateTime timestamp;
+        json data;
+        string message;
+        int msg_count = 1;
+        int seq_id = 1;
+    }
+
+    [erlang http.server]
+    webservice ChronosIngestionService
+    {
+        [erlang http.handler="rest/generated/web_rest_ingest" http.callback="web_rest_callback_ingest" http.body_reader="web_util:collect_body"]
+        IngestLogs => POST /ingest/{string app}/{string component}/{string branch}/{string version}
+            list<IngestedLogEntry> ->
+            201: GenericResponse,
+            400: BadRequestError<IngestionError>,
+            403: ForbiddenError,
+            500: InternalServerError;
+    }
+
+    //[erlang http.server]
+    webservice ChronosNdjsonService
+    {
+        //[erlang http.handler="rest/generated/web_rest_ingest_ndjson" http.callback="web_rest_callback_ingest_ndjson" http.body_reader="web_util:collect_body_ndjson"]
+        IngestLogsAsNdjson => POST /ingest-ndjson/{string app}/{string component}/{string branch}/{string version}
+            ~content-type: "application/x-ndjson"
+            list<IngestedLogEntry> ->
+            201: GenericResponse,
+            400: BadRequestError<IngestionError>,
+            403: ForbiddenError,
+            500: InternalServerError;
+    }
+}

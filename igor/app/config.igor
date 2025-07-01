@@ -1,0 +1,105 @@
+[* json.enabled]
+module Config
+{
+    record Config
+    {
+        Project project;
+        Server server;
+        JWT jwt;
+        LDAP ldap;
+        dict<string, Logger> logger;
+        Postgres postgres;
+        dict<string, CouchDb> catalog;
+        Slack slack;
+    }
+
+    record Project
+    {
+        string name = "chronos";
+        string folder;
+    }
+
+    record Server
+    {
+        string listen;
+        bool cors = false;
+        bool debug = false;
+        ?string rpc_path;
+        ?string trpc_path;
+    }
+
+    record JWT
+    {
+        string aud = "chronos";
+        string secret;
+        uint ttl = 100000000;
+    }
+
+    record LDAP
+    {
+        string url;
+        string user;
+        string pass;
+        string base;
+        ?string admin_group;
+        uint refresh_interval = 60000;
+    }
+
+    enum LoggerLevel
+    {
+        debug;
+        info;
+        warning;
+        error;
+        critical;
+    }
+    enum LoggerKind
+    {
+        console;
+        file;
+        chronos;
+    }
+    variant Logger
+    {
+        tag LoggerKind kind;
+        LoggerLevel level = info;
+    }
+    record Logger.LoggerConsole[console]
+    {
+    }
+    record Logger.LoggerFile[file]
+    {
+        string path = "log";
+        string filename;
+        uint max_bytes = 8000000;
+        uint max_files = 10;
+    }
+    record Logger.LoggerChronos[chronos]
+    {
+        string buffer_path = "log";
+        string buffer_filename;
+        uint buffer_max_bytes = 64000;
+        uint buffer_flush_timeout = 5000;
+        string upload_url;
+        string upload_key;
+    }
+
+    record Postgres
+    {
+        string url;
+        uint max_connections = 10;
+        bool debug = false;
+    }
+
+    record CouchDb
+    {
+        string url;
+    }
+
+    record Slack
+    {
+        string url;
+        string team_id;
+        string token;
+    }
+}
